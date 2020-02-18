@@ -1,3 +1,10 @@
 build
 CMakeLists.txt.user*
 
+# SmartCameraOperator for Horses and Riders
+# Data, Weights, other stuff
+
+data/Kirchhellen*.avi
+data/*.names
+data/yolov3.cfg
+data/yolov3.weights
