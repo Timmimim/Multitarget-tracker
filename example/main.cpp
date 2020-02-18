@@ -93,6 +93,13 @@ int main(int argc, char** argv)
         asyncPipeline ? yolo_detector.AsyncProcess() : yolo_detector.SyncProcess();
 		break;
 	}
+
+    case 7:
+    {
+        SmartCamOperator_w_YoloDarknet smart_cam_operator(parser);
+        asyncPipeline ? smart_cam_operator.AsyncProcess() : smart_cam_operator.SyncProcess();
+        break;
+    }
 #endif
 
     default:
