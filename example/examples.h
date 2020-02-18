@@ -6,6 +6,14 @@
 
 #include "VideoExample.h"
 
+struct bounding_box
+{
+    int x;
+    int y;
+    int w;
+    int h;
+};
+
 ///
 /// \brief DrawFilledRect
 ///
@@ -735,8 +743,9 @@ protected:
 // ---------------------------------------------------------------------- //
 // ---------------------------------------------------------------------- //
 
+#define bb_history 50
 
-#ifdef BUILD_YOLO_LIB
+//#ifdef BUILD_YOLO_LIB
 // ----------------------------------------------------------------------
 
 ///
@@ -749,9 +758,22 @@ public:
 		:
 		VideoExample(parser)
 	{
+            // Init RingMemory to show
+            cv::UMat frame = m_frameInfo[0].m_frame.getUMat(cv::ACCESS_READ);
+            for (int i = 0; i < bb_history; i++)
+            {
+                bb_ring_memory[i] = {0, 0, frame.cols, frame.rows};
+            }
 	}
 
 protected:
+
+    ///
+    /// \brief Ring Memory
+    ///
+    struct bounding_box bb_ring_memory[bb_history];
+    int ring_mem_index = 0;
+
     ///
     /// \brief InitDetector
     /// \param frame
@@ -879,6 +901,8 @@ protected:
 
         //m_detector->CalcMotionMap(frame);
 	}
+
+
 };
 
 #endif
