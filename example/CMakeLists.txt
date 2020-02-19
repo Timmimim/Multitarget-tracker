@@ -47,3 +47,4 @@ endif(BUILD_YOLO_LIB)
 ADD_EXECUTABLE(${PROJECT_NAME} ${SOURCES} ${HEADERS})
 
 TARGET_LINK_LIBRARIES(${PROJECT_NAME} ${LIBS})
+target_link_libraries(${PROJECT_NAME} /usr/lib/gcc/x86_64-linux-gnu/7/libstdc++fs.a)
