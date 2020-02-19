@@ -1,5 +1,9 @@
 build
 CMakeLists.txt.user*
+cmake-build-debug
+
+# IDE
+.idea
 
 # SmartCameraOperator for Horses and Riders
 # Data, Weights, other stuff

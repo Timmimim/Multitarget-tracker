@@ -847,7 +847,7 @@ protected:
 // ---------------------------------------------------------------------- //
 // ---------------------------------------------------------------------- //
 
-#define bb_history 100
+#define bb_history 50
 
 #ifdef BUILD_YOLO_LIB
 // ----------------------------------------------------------------------
@@ -1037,7 +1037,7 @@ protected:
         else
         {
             frames_without_detected_objects = 0;
-            struct bounding_box joint_ROI {frame.cols, frame.rows, 0, 0};
+            struct bounding_box joint_ROI {frame.cols, frame.rows, 1, 1};
             for (const auto& track : tracks)
             {
                 cv::Rect brect = track.m_rrect.boundingRect();
@@ -1127,73 +1127,16 @@ protected:
                 }
             }
 
-            std::cout << "AFTER ASPECT RATIO CORRECTION" << std::endl;
-            std::cout << ROI.x << " " << ROI.y << " " << ROI.w << " " << ROI.h << std::endl;
-
             bb_ring_memory[framesCounter % bb_history] = ROI;
         }
 
-        /*
-        struct bounding_box ROI_raw;
-        ROI_raw = expZoomSmoothing(bb_ring_memory, framesCounter, 0.3);
-
-        if (ROI_raw.x - 50 >= 0) ROI_raw.x -= 50;
-        if (ROI_raw.y - 50 >= 0) ROI_raw.y -= 50;
-        if (ROI_raw.x + ROI_raw.w + 100 <= frame.cols) ROI_raw.w += 100;
-        if (ROI_raw.y + ROI_raw.h + 100 <= frame.rows) ROI_raw.h += 100;
-
-        struct bounding_box ROI;
-
-        // check for and extablish 16:9 aspect ratio
-        // TODO: This probably needs testing and more case coverage!
-        std::cout << "x: "<< ROI_raw.x << ", y: " << ROI_raw.y << std::endl;
-        std::cout << ROI_raw.w << " x " << ROI_raw.h << std::endl;
-        if ((ROI_raw.w / ROI_raw.h) < 1.7777777)
-        {
-            ROI.y = ROI_raw.y;
-            ROI.w = (int) (ROI_raw.h * 1.7777777 + .5);
-            ROI.h = ROI_raw.h;
-
-            if ((ROI_raw.x - .5 * (ROI.w - ROI_raw.w)) < 0) {
-                ROI.x = 0;
-                ROI.w -= (int) (ROI_raw.x - .5 * (ROI.w - ROI_raw.w) + .5);
-            }
-            else if ((ROI_raw.x + ROI_raw.w + .5 * (ROI.w - ROI_raw.w)) >= frame.cols)
-            {
-                ROI.x = (int) (ROI_raw.x - (frame.cols - 1 - (ROI_raw.x + .5 * (ROI.w - ROI_raw.w))) + .5);
-                ROI.w = frame.cols - 1;
-            }
-            else
-            {
-                ROI.x = (int) (ROI_raw.x - .5 * (ROI.w - ROI_raw.w) + .5);
-            }
-        }
-        else
-        if ((ROI_raw.w / ROI_raw.h) > 1.7777777)
-        {
-            ROI.x = ROI_raw.x;
-            ROI.w = ROI_raw.w;
-            ROI.h = (int) (ROI_raw.w * 0.5625 + .5);
-
-            if ((ROI_raw.y - .5 * (ROI.h - ROI_raw.h)) < 0)
-            {
-                ROI.y = 0;
-                ROI.h -= (int) ((ROI_raw.y - .5 * (ROI.h - ROI_raw.h)) + .5);
-                std::cout << ROI.h << std::endl;
-            }
-            else if ((ROI_raw.y + ROI_raw.h + .5 * (ROI.h - ROI_raw.h)) >= frame.rows)
-            {
-                ROI.y = (int) (ROI_raw.y - (frame.rows - 1 - (ROI_raw.y + .5 * (ROI.h - ROI_raw.h))) + .5);
-                ROI.h = frame.rows - 1;
-            }
-            else
-            {
-                ROI.y = (int) (ROI_raw.y - .5 * (ROI.h - ROI_raw.h) + .5);
-            }
-        }*/
-
         struct bounding_box smoothedROI;
         smoothedROI = expZoomSmoothing(bb_ring_memory, framesCounter, 0.2);
+
+        if (smoothedROI.h == 0 || smoothedROI.w == 0)
+        {
+            smoothedROI = bb_ring_memory[framesCounter % bb_history];
+        }
 
         cv::Rect crop_region;
         crop_region.x = smoothedROI.x;
@@ -1201,6 +1144,7 @@ protected:
         crop_region.width = smoothedROI.w;
         crop_region.height = smoothedROI.h;
 
+        
         if(crop_region.x < 0)
         {
             crop_region.width -= crop_region.x;
@@ -1217,13 +1161,13 @@ protected:
         }
         if(crop_region.y + crop_region.height > frame.rows - 1)
         {
-            crop_region.y += frame.rows - 1 - (crop_region.y + crop_region.rows);
+            crop_region.y += frame.rows - 1 - (crop_region.y + crop_region.height);
         }
 
 
-        std::cout << "SMOOTHING DONE" << std::endl;
         std::cout << crop_region.x << " " << crop_region.y << " " << crop_region.width << " " << crop_region.height << std::endl;
         std::cout << frame.cols << " x " << frame.rows << std::endl;
+
 
 
         cv::Mat croppedImage = frame(crop_region);
