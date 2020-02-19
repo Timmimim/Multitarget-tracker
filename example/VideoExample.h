@@ -29,6 +29,11 @@ public:
     void AsyncProcess();
     void SyncProcess();
 
+    cv::UMat getFrame()
+    {
+        return this->m_frameInfo[0].m_frame.getUMat(cv::ACCESS_READ);
+    }
+
 protected:
     std::unique_ptr<BaseDetector> m_detector;
     std::unique_ptr<CTracker> m_tracker;
@@ -49,6 +54,8 @@ protected:
 
     virtual void DrawData(cv::Mat frame, int framesCounter, int currTime) = 0;
 
+    virtual cv::Mat ZoomInOnROI(cv::Mat frame, int framesCounter, int currTime) = 0;
+
     void DrawTrack(cv::Mat frame, int resizeCoeff, const TrackingObject& track, bool drawTrajectory = true);
 
 private:
@@ -56,6 +63,7 @@ private:
     bool m_isDetectorInitialized = false;
     std::string m_inFile;
     std::string m_outFile;
+    std::string m_outFileZoomed;
     int m_fourcc = cv::VideoWriter::fourcc('M', 'J', 'P', 'G');
     int m_startFrame = 0;
     int m_endFrame = 0;
@@ -76,4 +84,5 @@ private:
 
     bool OpenCapture(cv::VideoCapture& capture);
     bool WriteFrame(cv::VideoWriter& writer, const cv::Mat& frame);
+    bool WriteZoomedFrame(cv::VideoWriter& writer, const cv::Mat& frame);
 };

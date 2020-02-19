@@ -2,6 +2,10 @@
 #include <ctime>
 #include <future>
 
+#include <string>
+#include <experimental/filesystem>
+namespace fs = std::experimental::filesystem;
+
 #include "VideoExample.h"
 
 ///
@@ -23,6 +27,16 @@ VideoExample::VideoExample(const cv::CommandLineParser& parser)
 {
     m_inFile = parser.get<std::string>(0);
     m_outFile = parser.get<std::string>("out");
+
+    fs::path path(parser.get<std::string>("out"));
+    auto filename = path.stem();
+    filename += "_zoomed";
+    auto ext = path.extension();
+    filename += ext.string();
+    auto parent = path.parent_path();
+    path = parent / filename;
+    m_outFileZoomed = path.string();
+
     m_showLogs = parser.get<int>("show_logs") != 0;
     m_startFrame = parser.get<int>("start_frame");
     m_endFrame = parser.get<int>("end_frame");
@@ -45,6 +59,7 @@ VideoExample::VideoExample(const cv::CommandLineParser& parser)
 void VideoExample::SyncProcess()
 {
     cv::VideoWriter writer;
+    cv::VideoWriter writerZoom;
 
 #ifndef SILENT_WORK
     cv::namedWindow("Video", cv::WINDOW_NORMAL | cv::WINDOW_KEEPRATIO);
@@ -109,6 +124,10 @@ void VideoExample::SyncProcess()
         allTime += t2 - t1;
         int currTime = cvRound(1000 * (t2 - t1) / freq);
 
+        // Crop, Zoom, and Save to new Video file
+        cv::Mat zoomedFrame = ZoomInOnROI(frame, framesCounter, currTime);
+        WriteZoomedFrame(writerZoom, zoomedFrame);
+
         DrawData(frame, framesCounter, currTime);
 
 #ifndef SILENT_WORK
@@ -156,6 +175,7 @@ void VideoExample::AsyncProcess()
     std::thread thCapDet(CaptureAndDetect, this, std::ref(stopCapture));
 
     cv::VideoWriter writer;
+    cv::VideoWriter writerZoom;
 
 #ifndef SILENT_WORK
     cv::namedWindow("Video", cv::WINDOW_NORMAL | cv::WINDOW_KEEPRATIO);
@@ -203,6 +223,10 @@ void VideoExample::AsyncProcess()
         int currTime = cvRound(1000 * (t2 - t1 + frameInfo.m_dt) / freq);
 
         //std::cout << "Frame " << framesCounter << ": td = " << (1000 * frameInfo.m_dt / freq) << ", tt = " << (1000 * (t2 - t1) / freq) << std::endl;
+
+        // Crop, Zoom, and Save to new Video file
+        cv::Mat zoomedFrame = ZoomInOnROI(frameInfo.m_frame, framesCounter, currTime);
+        WriteZoomedFrame(writerZoom, zoomedFrame);
 
         DrawData(frameInfo.m_frame, framesCounter, currTime);
 
@@ -463,6 +487,30 @@ bool VideoExample::WriteFrame(cv::VideoWriter& writer, const cv::Mat& frame)
         if (!writer.isOpened())
         {
             writer.open(m_outFile, m_fourcc, m_fps, frame.size(), true);
+        }
+        if (writer.isOpened())
+        {
+            writer << frame;
+            return true;
+        }
+    }
+    return false;
+}
+
+///
+/// \brief VideoExample::WriteFrame
+/// \param writer
+/// \param frame
+/// \return
+///
+bool VideoExample::WriteZoomedFrame(cv::VideoWriter& writer, const cv::Mat& frame)
+{
+    if (!m_outFile.empty())
+    {
+        if (!writer.isOpened())
+        {
+
+            writer.open(m_outFileZoomed, m_fourcc, m_fps, frame.size(), true);
         }
         if (writer.isOpened())
         {

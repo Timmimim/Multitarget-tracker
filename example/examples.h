@@ -1,8 +1,11 @@
 #pragma once
 
 #include <iostream>
+#include <algorithm>
 #include <vector>
 #include <map>
+
+#include <opencv2/imgproc.hpp>
 
 #include "VideoExample.h"
 
@@ -162,6 +165,22 @@ protected:
         m_detector->CalcMotionMap(frame);
     }
 
+    ///
+    /// \brief ZoomInOnROI
+    /// \param frame
+    /// \param framesCounter
+    /// \param currTime
+    ///
+    cv::Mat ZoomInOnROI(cv::Mat frame, int framesCounter, int currTime)
+    {
+        if (framesCounter + currTime == 0){
+            return frame;
+        }
+        else
+        {
+            return frame;
+        }
+    }
 private:
     int m_minObjWidth = 8;
     int m_minStaticTime = 5;
@@ -257,6 +276,23 @@ protected:
         }
 
         m_detector->CalcMotionMap(frame);
+    }
+
+    ///
+    /// \brief ZoomInOnROI
+    /// \param frame
+    /// \param framesCounter
+    /// \param currTime
+    ///
+    cv::Mat ZoomInOnROI(cv::Mat frame, int framesCounter, int currTime)
+    {
+        if (framesCounter + currTime == 0){
+            return frame;
+        }
+        else
+        {
+            return frame;
+        }
     }
 };
 
@@ -354,6 +390,23 @@ protected:
         }
 
         m_detector->CalcMotionMap(frame);
+    }
+
+    ///
+    /// \brief ZoomInOnROI
+    /// \param frame
+    /// \param framesCounter
+    /// \param currTime
+    ///
+    cv::Mat ZoomInOnROI(cv::Mat frame, int framesCounter, int currTime)
+    {
+        if (framesCounter + currTime == 0){
+            return frame;
+        }
+        else
+        {
+            return frame;
+        }
     }
 };
 
@@ -460,6 +513,23 @@ protected:
         }
 
         m_detector->CalcMotionMap(frame);
+    }
+
+    ///
+    /// \brief ZoomInOnROI
+    /// \param frame
+    /// \param framesCounter
+    /// \param currTime
+    ///
+    cv::Mat ZoomInOnROI(cv::Mat frame, int framesCounter, int currTime)
+    {
+        if (framesCounter + currTime == 0){
+            return frame;
+        }
+        else
+        {
+            return frame;
+        }
     }
 };
 
@@ -581,6 +651,23 @@ protected:
         }
 
         m_detector->CalcMotionMap(frame);
+    }
+
+    ///
+    /// \brief ZoomInOnROI
+    /// \param frame
+    /// \param framesCounter
+    /// \param currTime
+    ///
+    cv::Mat ZoomInOnROI(cv::Mat frame, int framesCounter, int currTime)
+    {
+        if (framesCounter + currTime == 0){
+            return frame;
+        }
+        else
+        {
+            return frame;
+        }
     }
 };
 
@@ -732,6 +819,23 @@ protected:
 
         //m_detector->CalcMotionMap(frame);
 	}
+
+    ///
+    /// \brief ZoomInOnROI
+    /// \param frame
+    /// \param framesCounter
+    /// \param currTime
+    ///
+	cv::Mat ZoomInOnROI(cv::Mat frame, int framesCounter, int currTime)
+    {
+        if (framesCounter + currTime == 0){
+            return frame;
+        }
+        else
+        {
+            return frame;
+        }
+    }
 };
 
 #endif
@@ -743,9 +847,9 @@ protected:
 // ---------------------------------------------------------------------- //
 // ---------------------------------------------------------------------- //
 
-#define bb_history 50
+#define bb_history 100
 
-//#ifdef BUILD_YOLO_LIB
+#ifdef BUILD_YOLO_LIB
 // ----------------------------------------------------------------------
 
 ///
@@ -758,12 +862,7 @@ public:
 		:
 		VideoExample(parser)
 	{
-            // Init RingMemory to show
-            cv::UMat frame = m_frameInfo[0].m_frame.getUMat(cv::ACCESS_READ);
-            for (int i = 0; i < bb_history; i++)
-            {
-                bb_ring_memory[i] = {0, 0, frame.cols, frame.rows};
-            }
+
 	}
 
 protected:
@@ -772,7 +871,9 @@ protected:
     /// \brief Ring Memory
     ///
     struct bounding_box bb_ring_memory[bb_history];
-    int ring_mem_index = 0;
+
+    int frames_since_init = 0;
+    int frames_without_detected_objects = 0;
 
     ///
     /// \brief InitDetector
@@ -828,7 +929,7 @@ protected:
 		settings.m_accelNoiseMag = 0.2f;                     // Accel noise magnitude for Kalman filter
         settings.m_distThres = 0.8f;                         // Distance threshold between region and object on two frames
         settings.m_minAreaRadius = frame.rows / 20.f;
-		settings.m_maximumAllowedSkippedFrames = cvRound(m_fps); // Maximum allowed skipped frames
+		settings.m_maximumAllowedSkippedFrames = cvRound(.8 * m_fps); // Maximum allowed skipped frames
 		settings.m_maxTraceLength = cvRound(2 * m_fps);      // Maximum trace length
 
 		/*
@@ -839,6 +940,12 @@ protected:
 		*/
 		
 		m_tracker = std::make_unique<CTracker>(settings);
+
+		// Init RingMemory to show
+        for (int i = 0; i < bb_history; i++)
+        {
+            bb_ring_memory[i] = {0, 0, frame.cols-1, frame.rows-1};
+        }
 
 		return true;
 	}
@@ -866,7 +973,6 @@ protected:
 				)
 			{
 				DrawTrack(frame, 1, track);
-
 
 				std::stringstream label;
 				label << track.m_type << " " << std::setprecision(2) << track.m_velocity << ": " << track.m_confidence;
@@ -903,6 +1009,322 @@ protected:
 	}
 
 
+	///
+    /// \brief ZoomInOnROI
+    /// \param frame
+    /// \param framesCounter
+    /// \param currTime
+    ///
+	cv::Mat ZoomInOnROI(cv::Mat frame, int framesCounter, int currTime)
+	{
+		auto tracks = m_tracker->GetTracks();
+
+		if (m_showLogs)
+		{
+			std::cout << "Frame " << framesCounter << ": tracks = " << tracks.size() << ", time = " << currTime << std::endl;
+		}
+
+		if (tracks.size() == 0 && frames_without_detected_objects <= 100)
+        {
+		    bb_ring_memory[framesCounter % bb_history] = bb_ring_memory[(framesCounter - 1) % bb_history];
+            ++frames_without_detected_objects;
+        }
+		else if (tracks.size() == 0 && frames_without_detected_objects > 100)
+        {
+		    struct bounding_box entire_frame {0, 0, frame.cols, frame.rows};
+		    bb_ring_memory[framesCounter % bb_history] = entire_frame;
+        }
+        else
+        {
+            frames_without_detected_objects = 0;
+            struct bounding_box joint_ROI {frame.cols, frame.rows, 0, 0};
+            for (const auto& track : tracks)
+            {
+                cv::Rect brect = track.m_rrect.boundingRect();
+
+                if (brect.x < 0)
+                {
+                    brect.width = std::min(brect.width, frame.cols - 1);
+                    brect.x = 0;
+                }
+                else if ((brect.x + brect.width) >= frame.cols)
+                {
+                    brect.x = std::max(0, frame.cols - brect.width - 1);
+                    brect.width = std::min(brect.width, frame.cols - 1);
+                }
+                if (brect.y < 0)
+                {
+                    brect.height = std::min(brect.height, frame.rows - 1);
+                    brect.y = 0;
+                }
+                else if ((brect.y + brect.height) >= frame.rows)
+                {
+                    brect.y = std::max(0, frame.rows - brect.height - 1);
+                    brect.height = std::min(brect.height, frame.rows - 1);
+                }
+                joint_ROI.x = (brect.x < joint_ROI.x) ?  brect.x : joint_ROI.x;
+                joint_ROI.y = (brect.y < joint_ROI.y) ?  brect.y : joint_ROI.y;
+                joint_ROI.w = ((brect.x + brect.width) > joint_ROI.w) ? (brect.x + brect.width) : joint_ROI.w;
+                joint_ROI.h = ((brect.y + brect.height) > joint_ROI.h) ? (brect.y + brect.height) : joint_ROI.h;
+
+            }
+            joint_ROI.w = joint_ROI.w - joint_ROI.x;
+            joint_ROI.h = joint_ROI.h - joint_ROI.y;
+
+            struct bounding_box ROI_raw = joint_ROI;
+
+
+            if (ROI_raw.x - 50 >= 0) ROI_raw.x -= 50;
+            if (ROI_raw.y - 50 >= 0) ROI_raw.y -= 50;
+            if (ROI_raw.x + ROI_raw.w + 100 <= frame.cols) ROI_raw.w += 100;
+            if (ROI_raw.y + ROI_raw.h + 100 <= frame.rows) ROI_raw.h += 100;
+
+
+            struct bounding_box ROI;
+
+            // check for and extablish 16:9 aspect ratio
+            // TODO: This probably needs testing and more case coverage!
+            if ((ROI_raw.w / ROI_raw.h) < 1.7777777)
+            {
+                ROI.y = ROI_raw.y;
+                ROI.w = (int) (ROI_raw.h * 1.7777777 + .5);
+                ROI.h = ROI_raw.h;
+
+                if ((ROI_raw.x - .5 * (ROI.w - ROI_raw.w)) < 0) {
+                    ROI.x = 0;
+                    ROI.w -= (int) (ROI_raw.x - .5 * (ROI.w - ROI_raw.w) + .5);
+                }
+                else if ((ROI_raw.x + ROI_raw.w + .5 * (ROI.w - ROI_raw.w)) >= frame.cols)
+                {
+                    ROI.x = (int) (ROI_raw.x - (frame.cols - 1 - (ROI_raw.x + .5 * (ROI.w - ROI_raw.w))) - .5);
+                    ROI.w = frame.cols - 1;
+                }
+                else
+                {
+                    ROI.x = (int) (ROI_raw.x - .5 * (ROI.w - ROI_raw.w) + .5);
+                }
+            }
+            else
+            if ((ROI_raw.w / ROI_raw.h) > 1.7777777)
+            {
+                ROI.x = ROI_raw.x;
+                ROI.w = ROI_raw.w;
+                ROI.h = (int) (ROI_raw.w * 0.5625 + .5);
+
+                if ((ROI_raw.y - .5 * (ROI.h - ROI_raw.h)) < 0)
+                {
+                    ROI.y = 0;
+                    ROI.h -= (int) ((ROI_raw.y - .5 * (ROI.h - ROI_raw.h)) + .5);
+                }
+                else if ((ROI_raw.y + ROI_raw.h + .5 * (ROI.h - ROI_raw.h)) >= frame.rows)
+                {
+                    ROI.y = (int) (ROI_raw.y - (frame.rows - 1 - (ROI_raw.y + .5 * (ROI.h - ROI_raw.h))) - .5);
+                    ROI.h = frame.rows - 1;
+                }
+                else
+                {
+                    ROI.y = (int) (ROI_raw.y - .5 * (ROI.h - ROI_raw.h) + .5);
+                }
+            }
+
+            std::cout << "AFTER ASPECT RATIO CORRECTION" << std::endl;
+            std::cout << ROI.x << " " << ROI.y << " " << ROI.w << " " << ROI.h << std::endl;
+
+            bb_ring_memory[framesCounter % bb_history] = ROI;
+        }
+
+        /*
+        struct bounding_box ROI_raw;
+        ROI_raw = expZoomSmoothing(bb_ring_memory, framesCounter, 0.3);
+
+        if (ROI_raw.x - 50 >= 0) ROI_raw.x -= 50;
+        if (ROI_raw.y - 50 >= 0) ROI_raw.y -= 50;
+        if (ROI_raw.x + ROI_raw.w + 100 <= frame.cols) ROI_raw.w += 100;
+        if (ROI_raw.y + ROI_raw.h + 100 <= frame.rows) ROI_raw.h += 100;
+
+        struct bounding_box ROI;
+
+        // check for and extablish 16:9 aspect ratio
+        // TODO: This probably needs testing and more case coverage!
+        std::cout << "x: "<< ROI_raw.x << ", y: " << ROI_raw.y << std::endl;
+        std::cout << ROI_raw.w << " x " << ROI_raw.h << std::endl;
+        if ((ROI_raw.w / ROI_raw.h) < 1.7777777)
+        {
+            ROI.y = ROI_raw.y;
+            ROI.w = (int) (ROI_raw.h * 1.7777777 + .5);
+            ROI.h = ROI_raw.h;
+
+            if ((ROI_raw.x - .5 * (ROI.w - ROI_raw.w)) < 0) {
+                ROI.x = 0;
+                ROI.w -= (int) (ROI_raw.x - .5 * (ROI.w - ROI_raw.w) + .5);
+            }
+            else if ((ROI_raw.x + ROI_raw.w + .5 * (ROI.w - ROI_raw.w)) >= frame.cols)
+            {
+                ROI.x = (int) (ROI_raw.x - (frame.cols - 1 - (ROI_raw.x + .5 * (ROI.w - ROI_raw.w))) + .5);
+                ROI.w = frame.cols - 1;
+            }
+            else
+            {
+                ROI.x = (int) (ROI_raw.x - .5 * (ROI.w - ROI_raw.w) + .5);
+            }
+        }
+        else
+        if ((ROI_raw.w / ROI_raw.h) > 1.7777777)
+        {
+            ROI.x = ROI_raw.x;
+            ROI.w = ROI_raw.w;
+            ROI.h = (int) (ROI_raw.w * 0.5625 + .5);
+
+            if ((ROI_raw.y - .5 * (ROI.h - ROI_raw.h)) < 0)
+            {
+                ROI.y = 0;
+                ROI.h -= (int) ((ROI_raw.y - .5 * (ROI.h - ROI_raw.h)) + .5);
+                std::cout << ROI.h << std::endl;
+            }
+            else if ((ROI_raw.y + ROI_raw.h + .5 * (ROI.h - ROI_raw.h)) >= frame.rows)
+            {
+                ROI.y = (int) (ROI_raw.y - (frame.rows - 1 - (ROI_raw.y + .5 * (ROI.h - ROI_raw.h))) + .5);
+                ROI.h = frame.rows - 1;
+            }
+            else
+            {
+                ROI.y = (int) (ROI_raw.y - .5 * (ROI.h - ROI_raw.h) + .5);
+            }
+        }*/
+
+        struct bounding_box smoothedROI;
+        smoothedROI = expZoomSmoothing(bb_ring_memory, framesCounter, 0.2);
+
+        cv::Rect crop_region;
+        crop_region.x = smoothedROI.x;
+        crop_region.y = smoothedROI.y;
+        crop_region.width = smoothedROI.w;
+        crop_region.height = smoothedROI.h;
+
+        if(crop_region.x < 0)
+        {
+            crop_region.width -= crop_region.x;
+            crop_region.x = 0;
+        }
+        if(crop_region.y < 0)
+        {
+            crop_region.height -= crop_region.y;
+            crop_region.y = 0;
+        }
+        if(crop_region.x + crop_region.width > frame.cols - 1)
+        {
+            crop_region.x += frame.cols - 1 - (crop_region.x + crop_region.width);
+        }
+        if(crop_region.y + crop_region.height > frame.rows - 1)
+        {
+            crop_region.y += frame.rows - 1 - (crop_region.y + crop_region.rows);
+        }
+
+
+        std::cout << "SMOOTHING DONE" << std::endl;
+        std::cout << crop_region.x << " " << crop_region.y << " " << crop_region.width << " " << crop_region.height << std::endl;
+        std::cout << frame.cols << " x " << frame.rows << std::endl;
+
+
+        cv::Mat croppedImage = frame(crop_region);
+        // Scale ROI to frame size
+        cv::resize(croppedImage, croppedImage, cv::Size(frame.cols, frame.rows), 0, 0, cv::INTER_LINEAR);
+
+        return croppedImage;
+
+	}
+
+	//--------------------------------------------------------//
+	//------------------- Smoothing --------------------------//
+	//--------------------------------------------------------//
+
+	// Source:  https://de.wikibooks.org/wiki/Statistik:_Gl%C3%A4ttungsverfahren
+
+	/**
+	 * Exponential Smoothing of Time Series Data, in this case an n-slot ring memory.
+	 * Return value should be kept and stored for the next call,
+	 * where it should be used as the 'lastSmoothedValue' Parameter.
+	 *
+	 * @param   alpha               float   Smoothing-Faktor (0,..,1)
+	 * @param   lastSmoothedValue   float   Smoothing result for previous entry of time series
+	 * @param   value               float   Current value in time series to be smoothed
+	 */
+	float exp_smoothing (float alpha, float lastSmoothedValue, float value)
+	{
+	    return alpha * value + (1-alpha) * lastSmoothedValue;
+	}
+
+	/**
+	 * Double the Exponential Smoothing
+	 *
+	 * @param   alpha                       float   Smoothing-Faktor (0,..,1)
+	 * @param   lastDoublySmoothedValue     float   Doubly smoothed result for previous entry of time series
+     * @param   smoothedValue               float   Smoothed value of current entry in time series to be doubly smoothed
+	 */
+	float doubled_exp_smoothing (float alpha, float lastDoublySmoothedValue, float smoothedValue)
+	{
+	    return alpha * smoothedValue + (1-alpha) * lastDoublySmoothedValue;
+	}
+
+    /**
+     * Finish up double smoothing to find a useful prognosis value.
+     *
+     * @param   smoothedValue       float   Smoothing result for current value in TS
+     * @param   doublySmoothedValue float   DoubleSmoothing result for curr value in TS
+     */
+    float finish_double_smoothing (float smoothedValue, float doublySmoothedValue)
+    {
+        return std::max(0.0f, 2 * smoothedValue - doublySmoothedValue);
+    }
+
+    /**
+     * Zoom Smoothing using Exponential Smoothing (double smoothing is used).
+     * The purpose of this method is to find reasonable window to crop out of a frame around a ROI;
+     * the crop region should be chosen to simulate a camera zoom, while avoiding to be shaky
+     * due to inaccurate or moving ROI measurements.
+     *
+     * @param   array_of_BBs    struct[]     Ring Memory containing a struct (four-touple) holding BB coordinates (ROIs)
+     * @param   frame_count     uint        Index of current frame's ROI in ring memory
+     * @param   smoothing_fac   float       Smoothing factor alpha, value to be chosen from interval (0,..,1)
+     */
+    struct bounding_box expZoomSmoothing (struct bounding_box array_of_BBs[], int frame_count, float smoothing_fav)
+    {
+        // x and y coordinates of a bounding boxes center
+        // w and h are width and height of the BB
+        float x = 0.0, y = 0.0, w = 0.0, h = 0.0;
+
+        // initialize some values (timeseries needs to start with values furthest backwards)
+        struct bounding_box last_smoothed = array_of_BBs[(frame_count - (bb_history - 1)) % bb_history];
+        struct bounding_box last_double_smoothed = array_of_BBs[(frame_count - (bb_history - 1)) % bb_history];
+
+        for (int i = bb_history-2; i > 0; --i)
+        {
+            struct bounding_box curr = array_of_BBs[(frame_count - i) % bb_history];
+
+            last_smoothed.x = exp_smoothing(smoothing_fav, last_smoothed.x, curr.x);
+            last_double_smoothed.x = doubled_exp_smoothing(smoothing_fav, last_double_smoothed.x, last_smoothed.x);
+
+            last_smoothed.y = exp_smoothing(smoothing_fav, last_smoothed.y, curr.y);
+            last_double_smoothed.y = doubled_exp_smoothing(smoothing_fav, last_double_smoothed.y, last_smoothed.y);
+
+            last_smoothed.w = exp_smoothing(smoothing_fav, last_smoothed.w, curr.w);
+            last_double_smoothed.w = doubled_exp_smoothing(smoothing_fav, last_double_smoothed.w, last_smoothed.w);
+
+            last_smoothed.h = exp_smoothing(smoothing_fav, last_smoothed.h, curr.h);
+            last_double_smoothed.h = doubled_exp_smoothing(smoothing_fav, last_double_smoothed.h, last_smoothed.h);
+        }
+
+        x = finish_double_smoothing(last_smoothed.x, last_double_smoothed.x);
+        y = finish_double_smoothing(last_smoothed.y, last_double_smoothed.y);
+        w = finish_double_smoothing(last_smoothed.w, last_double_smoothed.w);
+        h = finish_double_smoothing(last_smoothed.h, last_double_smoothed.h);
+
+        // eventuell kein finish und stattdessen lastSmoothedValues verwenden (kein doublen)
+        // je nach performance kann ein Teil zuvor als Mean berechnet werden und als "kopfelement"
+        // in der exponentiellen Glättung verwendet werden. Aber das müssen wir testen.
+
+        return bounding_box {int(x), int(y), int(w), int(h)};
+    }
 };
 
 #endif
