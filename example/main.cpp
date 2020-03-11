@@ -97,7 +97,7 @@ int main(int argc, char** argv)
     case 7:
     {
         SmartCamOperator_w_YoloDarknet smart_cam_operator(parser);
-        asyncPipeline ? smart_cam_operator.AsyncProcess() : smart_cam_operator.SyncProcess();
+        asyncPipeline ? smart_cam_operator.AsyncProcess_SmartCamOp() : smart_cam_operator.SyncProcess();
         break;
     }
 #endif

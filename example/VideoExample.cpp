@@ -331,6 +331,7 @@ void VideoExample::CaptureAndDetect(VideoExample* thisPtr, std::atomic<bool>& st
             }
         }
 
+
         int64 t1 = cv::getTickCount();
         thisPtr->Detection(frameInfo.m_frame, frameInfo.m_regions);
         int64 t2 = cv::getTickCount();
@@ -370,6 +371,228 @@ void VideoExample::Detection(cv::Mat frame, regions_t& regions)
 
     regions.assign(std::begin(regs), std::end(regs));
 }
+
+
+///////////////////////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////////////////////
+
+/**
+ * Speed-Up by skipping frame in Detection - Attempted Tradeoff between accuracy and efficiency!
+ * Altered Methods specifically for SmartCameraOperator_w_YOLODetector
+ */
+
+///
+/// \brief VideoExample::AsyncProcess
+///
+void VideoExample::AsyncProcess_SmartCamOp()
+{
+    std::atomic<bool> stopCapture(false);
+
+    std::thread thCapDet(CaptureAndDetect_SmartCamOp, this, std::ref(stopCapture));
+
+    cv::VideoWriter writer;
+    cv::VideoWriter writerZoom;
+
+#ifndef SILENT_WORK
+    cv::namedWindow("Video", cv::WINDOW_NORMAL | cv::WINDOW_KEEPRATIO);
+    bool manualMode = false;
+#endif
+
+    double freq = cv::getTickFrequency();
+
+    int framesCounter = m_startFrame + 1;
+
+    int64 allTime = 0;
+    int64 startLoopTime = cv::getTickCount();
+    size_t processCounter = 0;
+    for (; !stopCapture.load(); )
+    {
+        FrameInfo& frameInfo = m_frameInfo[processCounter % 2];
+        {
+            std::unique_lock<std::mutex> lock(frameInfo.m_mutex);
+            if (!frameInfo.m_cond.wait_for(lock, std::chrono::milliseconds(m_captureTimeOut), [&frameInfo]{ return frameInfo.m_captured; }))
+            {
+                std::cout << "Wait frame timeout!" << std::endl;
+                break;
+            }
+        }
+
+        if (!m_isTrackerInitialized)
+        {
+            cv::UMat ufirst = frameInfo.m_frame.getUMat(cv::ACCESS_READ);
+            m_isTrackerInitialized = InitTracker(ufirst);
+            if (!m_isTrackerInitialized)
+            {
+                std::cerr << "CaptureAndDetect: Tracker initialize error!!!" << std::endl;
+                frameInfo.m_cond.notify_one();
+                break;
+            }
+        }
+
+        int64 t1 = cv::getTickCount();
+
+        Tracking(frameInfo.m_frame, frameInfo.m_regions);
+
+        int64 t2 = cv::getTickCount();
+
+        allTime += t2 - t1 + frameInfo.m_dt;
+        int currTime = cvRound(1000 * (t2 - t1 + frameInfo.m_dt) / freq);
+
+        //std::cout << "Frame " << framesCounter << ": td = " << (1000 * frameInfo.m_dt / freq) << ", tt = " << (1000 * (t2 - t1) / freq) << std::endl;
+
+        // Crop, Zoom, and Save to new Video file
+        cv::Mat zoomedFrame = ZoomInOnROI(frameInfo.m_frame, framesCounter, currTime);
+        WriteZoomedFrame(writerZoom, zoomedFrame);
+
+        DrawData(frameInfo.m_frame, framesCounter, currTime);
+
+        WriteFrame(writer, frameInfo.m_frame);
+
+        int k = 0;
+
+#ifndef SILENT_WORK
+        cv::imshow("Video", frameInfo.m_frame);
+
+        int waitTime = manualMode ? 0 : 1;// std::max<int>(1, cvRound(1000 / m_fps - currTime));
+        k = cv::waitKey(waitTime);
+        if (k == 'm' || k == 'M')
+        {
+            manualMode = !manualMode;
+        }
+#else
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+#endif
+        
+        {
+            std::unique_lock<std::mutex> lock(frameInfo.m_mutex);
+            frameInfo.m_captured = false;
+        }
+        frameInfo.m_cond.notify_one();
+
+        if (k == 27)
+        {
+            break;
+        }
+        ++framesCounter;
+        if (m_endFrame && framesCounter > m_endFrame)
+        {
+            std::cout << "Process: riched last " << m_endFrame << " frame" << std::endl;
+            break;
+        }
+        ++processCounter;
+    }
+    stopCapture = true;
+
+    if (thCapDet.joinable())
+    {
+        thCapDet.join();
+    }
+
+    int64 stopLoopTime = cv::getTickCount();
+
+    std::cout << "algorithms time = " << (allTime / freq) << ", work time = " << ((stopLoopTime - startLoopTime) / freq) << std::endl;
+
+#ifndef SILENT_WORK
+    cv::waitKey(m_finishDelay);
+#endif
+}
+
+///
+/// \brief VideoExample::CaptureAndDetect
+/// \param thisPtr
+/// \param stopCapture
+///
+void VideoExample::CaptureAndDetect_SmartCamOp(VideoExample* thisPtr, std::atomic<bool>& stopCapture)
+{
+    cv::VideoCapture capture;
+    if (!thisPtr->OpenCapture(capture))
+    {
+        std::cerr << "Can't open " << thisPtr->m_inFile << std::endl;
+        stopCapture = true;
+        return;
+    }
+
+    int trackingTimeOut = thisPtr->m_trackingTimeOut;
+    size_t processCounter = 0;
+    for (; !stopCapture.load();)
+    {
+        FrameInfo& frameInfo = thisPtr->m_frameInfo[processCounter % 2];
+
+        {
+            std::unique_lock<std::mutex> lock(frameInfo.m_mutex);
+            if (!frameInfo.m_cond.wait_for(lock, std::chrono::milliseconds(trackingTimeOut), [&frameInfo]{ return !frameInfo.m_captured; }))
+            {
+                std::cout << "Wait tracking timeout!" << std::endl;
+                frameInfo.m_cond.notify_one();
+                break;
+            }
+        }
+
+        capture >> frameInfo.m_frame;
+        if (frameInfo.m_frame.empty())
+        {
+            std::cerr << "CaptureAndDetect: frame is empty!" << std::endl;
+            frameInfo.m_cond.notify_one();
+            break;
+        }
+
+        if (!thisPtr->m_isDetectorInitialized)
+        {
+            cv::UMat ufirst = frameInfo.m_frame.getUMat(cv::ACCESS_READ);
+            thisPtr->m_isDetectorInitialized = thisPtr->InitDetector(ufirst);
+            if (!thisPtr->m_isDetectorInitialized)
+            {
+                std::cerr << "CaptureAndDetect: Detector initialize error!!!" << std::endl;
+                frameInfo.m_cond.notify_one();
+                break;
+            }
+        }
+
+        int64 t1 = cv::getTickCount();
+        thisPtr->Detection_SmartCamOp(frameInfo.m_frame, frameInfo.m_regions, processCounter);
+        int64 t2 = cv::getTickCount();
+        frameInfo.m_dt = t2 - t1;
+
+        {
+            std::unique_lock<std::mutex> lock(frameInfo.m_mutex);
+            frameInfo.m_captured = true;
+        }
+        frameInfo.m_cond.notify_one();
+
+        ++processCounter;
+    }
+    stopCapture = true;
+}
+
+
+///
+/// \brief VideoExample::Detection
+/// \param frame
+/// \param regions
+///
+void VideoExample::Detection_SmartCamOp(cv::Mat frame, regions_t& regions, int frameCounter)
+{
+    if(frameCounter % 1 == 0) {
+        cv::UMat uframe;
+        if (!m_detector->CanGrayProcessing()) {
+            uframe = frame.getUMat(cv::ACCESS_READ);
+        } else {
+            cv::cvtColor(frame, uframe, cv::COLOR_BGR2GRAY);
+        }
+
+        m_detector->Detect(uframe);
+
+        const regions_t &regs = m_detector->GetDetects();
+
+        regions.assign(std::begin(regs), std::end(regs));
+    }
+}
+
+
+///////////////////////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////////////////////
 
 ///
 /// \brief VideoExample::Tracking

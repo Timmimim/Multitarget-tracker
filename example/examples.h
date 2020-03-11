@@ -850,7 +850,7 @@ protected:
 #define bb_history 50
 
 #ifdef BUILD_YOLO_LIB
-// ----------------------------------------------------------------------
+// ---------------------------------------------------------------------- //
 
 ///
 /// \brief The SmartCamOperator_w_YoloDarknet class
@@ -1163,11 +1163,6 @@ protected:
         {
             crop_region.y += frame.rows - 1 - (crop_region.y + crop_region.height);
         }
-
-
-        std::cout << crop_region.x << " " << crop_region.y << " " << crop_region.width << " " << crop_region.height << std::endl;
-        std::cout << frame.cols << " x " << frame.rows << std::endl;
-
 
 
         cv::Mat croppedImage = frame(crop_region);

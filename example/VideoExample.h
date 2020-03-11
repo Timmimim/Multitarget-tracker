@@ -27,6 +27,7 @@ public:
     virtual ~VideoExample() = default;
 
     void AsyncProcess();
+    void AsyncProcess_SmartCamOp();
     void SyncProcess();
 
     cv::UMat getFrame()
@@ -45,11 +46,13 @@ protected:
     int m_trackingTimeOut = 60000;
 
     static void CaptureAndDetect(VideoExample* thisPtr, std::atomic<bool>& stopCapture);
+    static void CaptureAndDetect_SmartCamOp(VideoExample* thisPtr, std::atomic<bool>& stopCapture);
 
     virtual bool InitDetector(cv::UMat frame) = 0;
     virtual bool InitTracker(cv::UMat frame) = 0;
 
     void Detection(cv::Mat frame, regions_t& regions);
+    void Detection_SmartCamOp(cv::Mat frame, regions_t& regions, int frameCounter);
     void Tracking(cv::Mat frame, const regions_t& regions);
 
     virtual void DrawData(cv::Mat frame, int framesCounter, int currTime) = 0;
